@@ -5,3 +5,45 @@ date: "2023-10-19"
 output: html_document
 ---
 
+# IRS Data
+
+## Variables
+
+| VARIABLE NAME | DESCRIPTION                                                 | VALUE/LINE REFERENCE                                                                                                                                 | Type |   |
+|---------------|-------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------|------|---|
+| STATEFIPS     | The State Federal Information Processing System (FIPS) code | 01-56                                                                                                                                                | Char |   |
+| STATE         | The State associated with the ZIP code                      | Two-digit State abbreviation code                                                                                                                    | Char |   |
+| ZIPCODE       | 5-digit Zip code                                            |                                                                                                                                                      | Char |   |
+| AGI_STUB      | Size of adjusted gross income                               | 1 = $1 under $25,000 2 = $25,000 under $50,000 3 = $50,000 under $75,000 4 = $75,000 under $100,000 5 = $100,000 under $200,000 6 = $200,000 or more | Num  |   |
+| N19700        | Number of returns with Total charitable contributions       | Schedule A:1                                                                                                                                         | Num  |   |
+| A19700        | Total charitable contributions amount                       | Schedule A:14                                                                                                                                        | Num  |   |
+		
+## Notes
+- Tax Year 2020
+  * New variables include: Charitable deductions if took standard deduction (N02910 and A02910)
+  * Due to the COVID-19 pandemic, delays in processing Tax Year 2020 returns occurred because of the temporary closing of submission processing centers. Because of this, delayed Tax Year 2020 paper returns that were processed up until early June of 2022 were included within the data. In addition, returns filed solely for the purpose of receiving an Economic Impact Payment, due to COVID-19, were excluded from the data.
+
+- Tax Year 2019 
+  * Due to the COVID-19 pandemic, delays in processing Tax Year 2019 returns occurred because of the temporary closing of submission processing centers. Because of this, delayed Tax Year 2019 paper returns that were processed up until mid-July of 2021 were included within the data. In addition, returns filed for the purpose of receiving an Economic Impact Payment, due to COVID-19, were excluded from the data.
+  
+- Tax Year 2018
+  * For Tax Year 2018, the Form 1040 underwent a major redesign
+  
+- Tax Year 2017
+- Tax Year 2016
+- Tax Year 2015
+- Tax Year 2014
+- Tax Year 2013
+- Tax Year 2012
+- Tax Year 2011
+
+- Tax Year 2009-2010
+  * AGI available
+
+- Tax Year 1998, 2001, 2002, 2004-2008
+  * no AGI
+
+```{r}
+setwd("/Users/hyoon/Desktop/substitution/irs")
+tax20 <- read.csv("20zpallagi.csv")
+```
