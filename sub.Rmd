@@ -5,7 +5,12 @@ date: "2023-10-19"
 output: html_document
 ---
 
-# IRS Data
+# IRS Data (2005-2020)
+
+## Source
+
+https://www.irs.gov/statistics/soi-tax-stats-individual-income-tax-statistics-zip-code-data-soi
+
 
 ## Variables
 
@@ -15,6 +20,8 @@ output: html_document
 | STATE         | The State associated with the ZIP code                      | Two-digit State abbreviation code                                                                                                                    | Char |   |
 | ZIPCODE       | 5-digit Zip code                                            |                                                                                                                                                      | Char |   |
 | AGI_STUB      | Size of adjusted gross income                               | 1 = $1 under $25,000 2 = $25,000 under $50,000 3 = $50,000 under $75,000 4 = $75,000 under $100,000 5 = $100,000 under $200,000 6 = $200,000 or more | Num  |   |
+| N1            | Number of returns [3]                                       |                                                                                                                                                      | Num  |   |
+| A00100        | Adjust gross income (AGI) [8]                               | 1040:11                                                                                                                                              | Num  |   |
 | N19700        | Number of returns with Total charitable contributions       | Schedule A:1                                                                                                                                         | Num  |   |
 | A19700        | Total charitable contributions amount                       | Schedule A:14                                                                                                                                        | Num  |   |
 		
@@ -42,8 +49,196 @@ output: html_document
 
 - Tax Year 1998, 2001, 2002, 2004-2008
   * no AGI
+  
+- Tax Year 1998, 2001, 2002, 2004
+  * not aggregated (separate state files)
+
+Main Variables  
+- A00100: AGI (adjust gross income)
+- N19700: Number of returns with Total charitable contributions
+- A19700: Total charitable contributions amount  
+
+## Reference
+
+Deryugina and Marx 2021
+- Zip codes with fewer than a threshold number of returns are excluded from the dataset, and charitable dona- tions below an undisclosed threshold are coded as zeros
+  * We restrict our sample to zip-code-year observations with at least 250 returns (the most stringent threshold)
+  * Because IRS disclosure rules prevent us from distinguishing true zeros in the data from censored values, we also restrict the sample to zip codes for which charitable contributions are always reported to be strictly positive.
+- To match zip codes to their geographic location, we use the US Census Bureau’s Zip Code Tabulation Areas (ZCTAs), which are spatial representations of the mailing areas covered by zip codes (US Department of Commerce, Geography Division 2010).
+  * To account for changes in the coverage of zip codes over time, we use data from the US Postal Service (USPS 2001–2020).
 
 ```{r}
-setwd("/Users/hyoon/Desktop/substitution/irs")
-tax20 <- read.csv("20zpallagi.csv")
+library(tidyverse)
+
+## Year 09-20
+
+filenames0920 <- paste0(sprintf('%02d', 09:20), "zpallnoagi")
+
+irs_read <- function(file) {
+  x <- read.csv(paste0("/Users/hyoon/Desktop/Yoon2/substitution/irs/", file, ".csv")) %>% 
+    select(STATEFIPS, STATE, ZIPCODE, A00100, N19700, A19700) %>%
+    dplyr::rename(fips = 1, state = 2, zipcode = 3, agi = 4, num_char = 5, amt_char = 6) %>%
+    mutate(year = substr(file, 1, 2))
+  return(x)
+}
+
+list <- list()
+for(i in filenames0920){
+ list[[i]] <- irs_read(i) 
+}
+
+## Pre-2009 is not aggregated to zipcode level
+# it's zipcode-agi level
+
+## Year 08
+# doesn't have num_char record
+
+# state, zipcode, a00100, a19700
+year08 <- read.csv("/Users/hyoon/Desktop/Yoon2/substitution/irs/08zpall.csv") %>% 
+  select(state, ZIPCODE, a00100, a19700) %>%
+  dplyr::rename(state = 1, zipcode = 2, agi = 3, amt_char = 4) %>%
+  mutate(num_char = NA) %>% group_by(state, zipcode) %>% summarize(agi = sum(agi),
+                                                                 num_char = sum(num_char), 
+                                                                 amt_char = sum(amt_char)) %>%
+  mutate(year = "08", fips = NA)
+
+## Year 07
+### so many NAs??
+
+year07 <- read.csv("/Users/hyoon/Desktop/Yoon2/substitution/irs/07zipcode.csv") %>% 
+  select(state, ZIPCODE, a00100, n19700, a19700) %>%
+  dplyr::rename(state = 1, zipcode = 2, agi = 3, num_char = 4, amt_char = 5) %>% 
+  mutate(num_char = ifelse(num_char == ".", NA, num_char),
+         amt_char = ifelse(amt_char == ".", NA, amt_char)) %>%
+  mutate_at(c("num_char", "amt_char"), .funs = as.numeric) %>%
+  group_by(state, zipcode) %>% summarize(agi = sum(agi),
+                                         num_char = sum(num_char),
+                                         amt_char = sum(amt_char)) %>%
+  mutate(year = "07", fips = NA)
+
+## Year 05-06
+
+# state, zipcode, a00100, n19700, a19700
+filenames0506 <- c("06zipcode", "05zipcode")
+
+irs_read2 <- function(file) {
+  x <- read.csv(paste0("/Users/hyoon/Desktop/Yoon2/substitution/irs/", file, ".csv")) %>% 
+    select(state, zipcode, a00100, n19700, a19700) %>%
+    dplyr::rename(state = 1, zipcode = 2, agi = 3, num_char = 4, amt_char = 5) %>%
+    group_by(state, zipcode) %>% summarize(agi = sum(agi),
+                                               num_char = sum(num_char),
+                                               amt_char = sum(amt_char)) %>%
+    mutate(year = substr(file, 1, 2),
+           fips = NA)
+  return(x)
+}
+
+list2 <- list()
+for(i in filenames0506){
+ list2[[i]] <- irs_read2(i) 
+}
+
+irs <- rbind(bind_rows(list), year07, year08, bind_rows(list2)) %>% mutate(state = toupper(state))
 ```
+
+# FEMA Data
+
+## Source
+
+https://www.fema.gov/openfema-data-page/fema-web-declaration-areas-v1
+
+
+## Variables
+
+| Name                   | Title                    | Type      | Description                                                                                                                          |
+|------------------------|--------------------------|-----------|--------------------------------------------------------------------------------------------------------------------------------------|
+| id                     | ID                       | uuid      | Unique ID for the record that does not persist between data set refreshes                                                            |
+| disasterNumber         | Disaster Number          | smallint  | Sequentially assigned number used to designate an event or incident declared as a disaster                                           |
+| programTypeCode        | Program Type Code        | text      | The code for the type of available disaster assistance, i.e. HM (Hazard Mitigation), PA (Public Assistance), IH (Individual Housing) |
+| programTypeDescription | Program Type Description | text      | The written description of the program type code, i.e. PA-A - Debris Removal                                                         |
+| stateCode              | State Code               | text      | Two letter code for U.S. states, districts, and territories                                                                          |
+| stateName              | State Name               | text      | The name of phrase describing the U.S. state, district, or territory                                                                 |
+| placeCode              | Place Code               | text      | A FEMA designated 6-digit numerical code used to identify areas which are eligible for a specific type of disaster assistance        |
+| placeName              | Place Name               | text      | The name of the county associated with the place code, i.e. Mendocino (County), Corozal (Municipio)                                  |
+| designatedDate         | Designated Date          | date      | The date a disaster was officially designated                                                                                        |
+| entryDate              | Entry Date               | date      | The date the disaster areas were first entered into the NEMIS system                                                                 |
+| updateDate             | Update Date              | date      | The date the disaster areas were last updated by NEMIS                                                                               |
+| closeoutDate           | Closeout Date            | date      | The official closeout date of a disaster, after which, one can no longer apply for assistance                                        |
+| hash                   | Hash                     | text      | MD5 hash of fields and values of the record                                                                                          |
+| lastRefresh            | Last Refresh             | datetimez | Date the record was last updated in the API data store                                                                               |
+
+```{r}
+fema <- read.csv("/Users/hyoon/Desktop/Yoon2/substitution/fema/FemaWebDeclarationAreas.csv") %>% mutate(
+  designatedDate = as.Date(substr(.$designatedDate, 1, 10)),
+  countycode = as.numeric(str_sub(.$placeCode, 3)),
+  year = as.integer(substr(.$designatedDate, start=1, stop=4)),
+  month = as.integer(substr(.$designatedDate, start=6, stop=7))
+  ) %>% mutate(countycode = sprintf("%03d", as.numeric(.$countycode))) %>% 
+  select("disasterNumber", "programTypeDescription", "stateCode", "placeName", "designatedDate", "countycode", "year", "month") %>%
+  filter(designatedDate >= "2004-01-01" & designatedDate < "2020-12-12")
+```
+
+
+# EM-DAT (CRED)
+
+## Source
+
+https://public.emdat.be/
+
+filter (Natural, North America, 2004-2020)
+
+## Variables
+
+| Column Name                       | Type                                            | Description                                                                                                                                                                                                                          |
+|-----------------------------------|-------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Dis No.                           | ID, Mandatory                                   | A unique 8-digit identifier including the year (4 digits) and a sequential number (4 digits) for each disaster event (i.e., 2004-0659). In the EM-DAT Public Table, the ISO country code is appended. See column   ISO  below.       |
+| Historic                          | Yes/No, Mandatory                               | Binary field specifying whether or not the disaster happened before 2000, using the   Start Year . Data before 2000 should be considered of lesser quality (see   Time Bias).                                                        |
+| Classification Key                | ID, Mandatory                                   | A unique 15-character string identifying disasters in terms of the   Group ,   Subgroup ,   Type   and   Subtype   classification hierarchy. See   Disaster Classification System.                                                   |
+| Disaster Group                    | Name, Mandatory                                 | The disaster group, i.e., “Natural” or “Technological.” See   Disaster Classification System.                                                                                                                                        |
+| Disaster Subgroup                 | Name, Mandatory                                 | The disaster subgroup. See   Disaster Classification System.                                                                                                                                                                         |
+| Disaster Type                     | Name, Mandatory                                 | The disaster type. See   Disaster Classification System.                                                                                                                                                                             |
+| Disaster Subtype                  | Name, Mandatory                                 | The disaster subtype. See   Disaster Classification System.                                                                                                                                                                          |
+| Event Name                        | Optional                                        | Short specification for disaster identification, e.g., storm names (e.g., “Mitch”), plane type in air crash (e.g., “Boeing 707”), disease name (e.g., “Cholera”), or volcano name (e.g., “Etna”).                                    |
+| Location                          | Text, Optional                                  | Geographical location name as specified in the sources, e.g., city, village, department, province, state, or district. Used to identify corresponding GAUL   Admin Units   (see   GAUL Index and Admin Levels).                      |
+| Start Year                        | Numeric, Mandatory                              | Year of occurrence of the disaster.                                                                                                                                                                                                  |
+| Start Month                       | Numeric, Optional                               | Month of occurrence of the disaster. For sudden-impact disasters, this field is well defined. For disasters developing gradually over a longer time period (e.g., drought) with no precise onset date, this field can be left blank. |
+| Start Day                         | Numeric, Optional                               | Day of occurrence of the disaster. For sudden-impact disasters, this field is well defined. For disasters developing gradually over a longer time period (e.g., drought) with no precise onset date, this field can be left blank.   |
+| Total Deaths                      | Numeric, Optional                               | Total fatalities (deceased and missing combined, see   Human Impact Variables).                                                                                                                                                      |
+| No. Injured                       | Numeric, Optional                               | Number of people with physical injuries, trauma, or illness requiring immediate medical assistance due to the disaster (see   Human Impact Variables).                                                                               |
+| No. Affected                      | Numeric, Optional                               | Number of people requiring immediate assistance due to the disaster (see   Human Impact Variables).                                                                                                                                  |
+| Total Affected                    | Numeric, Optional                               | Total number of affected people ( No Injured ,   No Affected , and   No Homeless   combined, see   Human Impact Variables).                                                                                                          |
+| Total Damage (‘000 US$)           | Unadjusted Monetary Amount (‘000 US$), Optional | Value of all economic losses directly or indirectly due to the disaster, in thousands of US dollars (‘000 US$), relative to   Start Year , unadjusted for inflation (see   Economic Impact Variables).                               |
+| Total Damage, Adjusted (‘000 US$) | Adjusted Monetary Amount (‘000 US$), Optional   | Total Damage (‘000 US$)   adjusted for inflation using the Consumer Price Index ( CPI   column, see   Economic Adjustment).                                                                                                          |
+
+```{r}
+library(readxl)
+library(reshape)
+emdat <- read_excel("/Users/hyoon/Desktop/Yoon2/substitution/fema/public_emdat_custom_request_2023-10-31_f1e65710-cb3c-4f65-a05d-c2278767055c.xlsx") %>% 
+  filter(Country == "United States of America") %>%
+  select("DisNo.", "Disaster Subgroup", "Disaster Type", "Disaster Subtype", "Event Name", "Location", 
+         "Start Year", "Start Month", "Start Day", "Total Deaths", "No. Injured", "No. Affected", "Total Affected",
+         "Total Damage ('000 US$)", "Total Damage, Adjusted ('000 US$)") %>%
+  mutate(DisNo. = gsub(".*[-]([^.]+)[-].*", "\\1", .$DisNo.)) 
+
+data(state)
+all_states <- append(state.name, "District of Columbia")
+
+extract_states <- function(elem) {
+  extracted_states <- c()
+  while (TRUE) {
+    state <- str_extract(elem, paste(all_states, collapse = "|"))
+    if (is.na(state)) {
+      break
+    }
+    extracted_states <- c(extracted_states, state)
+    elem <- str_replace(elem, state, "")
+  }
+  extracted_states <- paste(extracted_states, collapse = ", ")
+  return(extracted_states)
+}
+
+emdat$Location <- sapply(emdat$Location, extract_states)
+
+emdat <- emdat %>% mutate(Location = strsplit(as.character(Location), ",")) %>% unnest(Location)
+```
+
